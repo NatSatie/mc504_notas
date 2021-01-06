@@ -1,4 +1,4 @@
-﻿# MC504: Capítulo 28: LOCKS (1/2)
+﻿# MC504: Capítulo 28: LOCKS
 Locks são mutex que são usados para garantir exclusão mútua.
 ```javascript
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -162,4 +162,51 @@ void lock(lock_t *lock)
 void unlock(lock_t *lock) 
 	lock->turn = lock->turn + 1;
 ```
+### Desistir?
+Depois de vários usos de spin-wait. O que podemos melhorar?
+É um conceito que pode ser chamado de *yield()*, que chama a thread que tem o lock e falar "eu desisto e passo para a próxima thread". Então a própria thread se desencalona. 
+## Proposta 7: "just yield, baby"
+
+
+## Proposta 8: 
+Finalmente podemos dar uma parada de threads presas no spin-wait. Agora o escalonador pode fazer **park()** que é por para dormir e **unpark()** que é acordar uma thread a partir de seu ID.
+Então ao observamos nosso lock ele tem:
+
+```javascript
+typedef struct __lock_t {  
+	int flag;  
+	int guard;  
+	queue_t *q;  
+} lock_t;  
+ ```
+
+  ```javascript
+void lock_init(lock_t *m) {  
+	m->flag = 0;  
+	m->guard = 0;  
+	queue_init(m->q);  
+
+void lock(lock_t *m) {  
+	while(TestAndSet(&m->guard, 1) == 1)
+		; //acquire guard lock by spinning  
+		if (m->flag == 0) 
+			m->flag = 1; // lock is acquired
+			m->guard = 0;  
+		else  
+			queue_add(m->q, gettid());  
+			m->guard = 0;  
+			park();  
+	  
+void unlock(lock_t *m) {  
+	while (TestAndSet(&m->guard, 1) == 1)  
+		; //acquire guard lock by spinning  
+		if (queue_empty(m->q))  
+			m->flag = 0; // let go of lock; no one wants it
+		else  
+			unpark(queue_remove(m->q)); // hold lock  
+			// (for next thread!)  
+		m->guard = 0;  
+```
+
+
 > Written with [StackEdit](https://stackedit.io/).
